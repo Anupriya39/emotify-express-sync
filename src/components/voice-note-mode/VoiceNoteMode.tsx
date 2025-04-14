@@ -1,5 +1,5 @@
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
@@ -20,15 +20,34 @@ const VoiceNoteMode = () => {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [recordingDuration, setRecordingDuration] = useState<number>(0);
   const [transcription, setTranscription] = useState<string>("");
+  const [currentText, setCurrentText] = useState<string>("");
   const [summary, setSummary] = useState<string>("");
   const [keyPoints, setKeyPoints] = useState<string[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const { toast } = useToast();
 
   const handleStartRecording = async () => {
     try {
+      // Reset states
+      setTranscription("");
+      setCurrentText("");
+      setSummary("");
+      setKeyPoints([]);
+      
+      // Check if browser supports Speech Recognition
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        toast({
+          title: "Speech Recognition Not Supported",
+          description: "Your browser doesn't support speech recognition.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Get audio stream for recording audio file
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorderRef.current = new MediaRecorder(stream);
       
@@ -37,8 +56,53 @@ const VoiceNoteMode = () => {
         audioChunksRef.current.push(event.data);
       };
       
-      mediaRecorderRef.current.onstop = handleStopRecording;
       mediaRecorderRef.current.start();
+      
+      // Set up speech recognition
+      // @ts-ignore - TypeScript doesn't know about the browser-specific implementation
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      speechRecognitionRef.current = new SpeechRecognition();
+      
+      speechRecognitionRef.current.continuous = true;
+      speechRecognitionRef.current.interimResults = true;
+      speechRecognitionRef.current.lang = 'en-US';
+      
+      let finalTranscriptionText = "";
+      
+      speechRecognitionRef.current.onresult = (event) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+            finalTranscriptionText += (finalTranscriptionText ? " " : "") + finalTranscript.trim();
+            setTranscription(finalTranscriptionText);
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+        
+        // Show what is currently being recognized in real-time
+        if (interimTranscript) {
+          setCurrentText(interimTranscript);
+        }
+      };
+      
+      speechRecognitionRef.current.onerror = (event) => {
+        console.error('Speech recognition error', event.error);
+      };
+      
+      speechRecognitionRef.current.onend = () => {
+        if (isRecording && speechRecognitionRef.current) {
+          // Restart recognition if it stopped but should be listening
+          speechRecognitionRef.current.start();
+        }
+      };
+      
+      speechRecognitionRef.current.start();
       
       setIsRecording(true);
       setRecordingDuration(0);
@@ -70,40 +134,49 @@ const VoiceNoteMode = () => {
     }
     
     if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
     }
     
-    setIsRecording(false);
+    if (speechRecognitionRef.current) {
+      speechRecognitionRef.current.stop();
+    }
     
-    // Mock transcription - in a real app, this would call a transcription API
-    setTimeout(() => {
-      const mockTranscription = `Thank you for joining today's meeting about the Q3 marketing strategy. We have several key points to discuss. First, we need to increase our social media presence by 30% this quarter. Second, we'll be launching a new product line in August that needs promotional materials. Third, the customer feedback survey showed that our messaging needs to be more concise and benefit-focused. Let's schedule follow-up meetings with each team to discuss specific action items. Any questions before we wrap up?`;
+    setIsRecording(false);
+    setCurrentText("");
+    
+    // Generate summary and key points for the transcription
+    if (transcription) {
+      // For simplicity, we'll create a basic summary and key points
+      // In a real app, you would use an AI API for this
+      const words = transcription.split(' ');
+      setSummary(`This recording contains ${words.length} words discussing ${words.length > 5 ? words.slice(0, 5).join(', ') : 'a topic'}.`);
       
-      setTranscription(mockTranscription);
+      // Extract some key points
+      const sentences = transcription.split(/[.!?]/);
+      const filteredPoints = sentences
+        .filter(sentence => sentence.trim().length > 10)
+        .slice(0, 4)
+        .map(sentence => `📝 ${sentence.trim()}`);
       
-      // Mock summary and key points - in a real app, this would use an AI API
-      setTimeout(() => {
-        setSummary("Q3 marketing strategy meeting outlined plans to boost social media presence by 30%, prepare for August product launch, and refine messaging based on customer feedback.");
-        
-        setKeyPoints([
-          "📈 Increase social media presence by 30% in Q3",
-          "🚀 New product line launching in August",
-          "💬 Customer feedback shows messaging needs to be more concise",
-          "📋 Schedule follow-up meetings with individual teams"
-        ]);
-        
-        toast({
-          title: "Transcription and summary ready",
-          description: "Your voice note has been processed successfully",
-        });
-      }, 1500);
+      setKeyPoints(filteredPoints.length > 0 ? filteredPoints : ["📝 No key points identified"]);
       
-    }, 1500);
+      toast({
+        title: "Transcription complete",
+        description: "Your voice note has been processed successfully",
+      });
+    } else {
+      toast({
+        title: "No speech detected",
+        description: "Try recording again and speak clearly",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleStopButtonClick = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
+      handleStopRecording();
     }
   };
 
@@ -132,6 +205,21 @@ const VoiceNoteMode = () => {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Cleanup effect
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      }
+      if (speechRecognitionRef.current) {
+        speechRecognitionRef.current.stop();
+      }
+    };
+  }, []);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-7 gap-6">
       <Card className="lg:col-span-4 bg-white shadow-md rounded-xl overflow-hidden">
@@ -153,6 +241,12 @@ const VoiceNoteMode = () => {
                 <div className="text-2xl font-bold mb-6">
                   {formatDuration(recordingDuration)}
                 </div>
+                {currentText && (
+                  <div className="p-3 mb-4 bg-blue-100 rounded-md border border-blue-300 animate-pulse max-w-md mx-auto">
+                    <p className="text-blue-700 font-medium">Listening...</p>
+                    <p className="text-gray-700">{currentText}</p>
+                  </div>
+                )}
                 <Button
                   variant="destructive"
                   size="lg"
@@ -177,11 +271,7 @@ const VoiceNoteMode = () => {
                       >
                         <Download className="mr-2 h-4 w-4" /> Download
                       </Button>
-                      <Button onClick={() => {
-                        setTranscription("");
-                        setSummary("");
-                        setKeyPoints([]);
-                      }}>
+                      <Button onClick={handleStartRecording}>
                         <Mic className="mr-2 h-4 w-4" /> New Recording
                       </Button>
                     </div>
