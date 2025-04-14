@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,7 +14,9 @@ import { cn } from "@/lib/utils";
 import EmojiSelector from "./EmojiSelector";
 import WebcamView from "./WebcamView";
 import EmojiPreview from "./EmojiPreview";
+import SpeechPoints from "./SpeechPoints";
 import { useToast } from "@/components/ui/use-toast";
+import { useFaceTracking } from "@/hooks/useFaceTracking";
 
 // Mock emoji data
 const EMOJIS = ["😊", "😂", "😍", "😢", "😡", "🤔", "😮", "😴", "🤢", "😎"];
@@ -28,8 +29,8 @@ const EmojiMode = () => {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const webcamRef = useRef<HTMLVideoElement>(null);
   const { toast } = useToast();
+  const faceData = useFaceTracking(webcamRef, isCapturing);
 
-  // Request camera permission on component mount
   useEffect(() => {
     const requestCameraPermission = async () => {
       try {
@@ -153,52 +154,60 @@ const EmojiMode = () => {
         </CardContent>
       </Card>
 
-      <Card className="lg:col-span-3 bg-white shadow-md rounded-xl overflow-hidden flex flex-col">
-        <CardContent className="p-0 flex flex-col flex-grow">
-          <div className="p-4 bg-purple-light border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-purple-dark">
-              Select Emoji
-            </h2>
-          </div>
-          
-          <Tabs defaultValue="standard" className="flex-grow flex flex-col">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger 
-                value="standard"
-                onClick={() => setCaptureMode("standard")}
-              >
-                Standard Emojis
-              </TabsTrigger>
-              <TabsTrigger 
-                value="meme"
-                onClick={() => setCaptureMode("meme")}
-              >
-                <Sparkles className="mr-1 h-4 w-4" /> Meme Emojis
-              </TabsTrigger>
-            </TabsList>
+      <div className="lg:col-span-3 space-y-6">
+        <Card className="bg-white shadow-md rounded-xl overflow-hidden flex flex-col">
+          <CardContent className="p-0 flex flex-col flex-grow">
+            <div className="p-4 bg-purple-light border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-purple-dark">
+                Select Emoji
+              </h2>
+            </div>
             
-            <TabsContent value="standard" className="flex-grow p-4">
-              <EmojiSelector 
-                emojis={EMOJIS} 
-                selectedEmoji={selectedEmoji} 
-                onSelectEmoji={setSelectedEmoji} 
-              />
-            </TabsContent>
-            
-            <TabsContent value="meme" className="flex-grow p-4">
-              <EmojiSelector 
-                emojis={MEME_EMOJIS} 
-                selectedEmoji={selectedEmoji} 
-                onSelectEmoji={setSelectedEmoji} 
-              />
-            </TabsContent>
-          </Tabs>
+            <Tabs defaultValue="standard" className="flex-grow flex flex-col">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger 
+                  value="standard"
+                  onClick={() => setCaptureMode("standard")}
+                >
+                  Standard Emojis
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="meme"
+                  onClick={() => setCaptureMode("meme")}
+                >
+                  <Sparkles className="mr-1 h-4 w-4" /> Meme Emojis
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="standard" className="flex-grow p-4">
+                <EmojiSelector 
+                  emojis={EMOJIS} 
+                  selectedEmoji={selectedEmoji} 
+                  onSelectEmoji={setSelectedEmoji} 
+                />
+              </TabsContent>
+              
+              <TabsContent value="meme" className="flex-grow p-4">
+                <EmojiSelector 
+                  emojis={MEME_EMOJIS} 
+                  selectedEmoji={selectedEmoji} 
+                  onSelectEmoji={setSelectedEmoji} 
+                />
+              </TabsContent>
+            </Tabs>
 
-          <div className="p-4 border-t border-gray-200">
-            <EmojiPreview emoji={selectedEmoji} isAnimating={isCapturing} />
-          </div>
-        </CardContent>
-      </Card>
+            <div className="p-4 border-t border-gray-200">
+              <EmojiPreview 
+                emoji={selectedEmoji} 
+                isAnimating={isCapturing} 
+                faceData={isCapturing ? faceData : undefined}
+              />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <SpeechPoints isActive={isCapturing} />
+      </div>
     </div>
   );
 };
