@@ -23,12 +23,17 @@ const EmojiPreview = ({ emoji: selectedEmoji, isAnimating, faceData }: EmojiPrev
   const [displayEmoji, setDisplayEmoji] = useState(selectedEmoji);
 
   useEffect(() => {
-    if (!isAnimating || !faceData) {
+    if (!isAnimating) {
       setDisplayEmoji(selectedEmoji);
       return;
     }
 
-    // Map facial expressions to emojis
+    if (!faceData) {
+      setDisplayEmoji("😐"); // neutral face when no facial data is available during animation
+      return;
+    }
+
+    // Determine emoji solely based on facial expressions
     if (faceData.isSmiling) {
       setDisplayEmoji("😊");
     } else if (faceData.isFrowning) {
@@ -36,8 +41,21 @@ const EmojiPreview = ({ emoji: selectedEmoji, isAnimating, faceData }: EmojiPrev
     } else if (faceData.isSurprised) {
       setDisplayEmoji("😮");
     } else {
-      // Default to selected emoji if no strong emotion detected
-      setDisplayEmoji(selectedEmoji);
+      // Check emotion values to determine the appropriate emoji
+      const { happy, sad, angry, surprised, neutral } = faceData.emotions;
+      const dominantEmotion = Math.max(happy, sad, angry, surprised, neutral);
+      
+      if (dominantEmotion === happy && happy > 0.3) {
+        setDisplayEmoji("😄");
+      } else if (dominantEmotion === sad && sad > 0.3) {
+        setDisplayEmoji("😢");
+      } else if (dominantEmotion === angry && angry > 0.3) {
+        setDisplayEmoji("😡");
+      } else if (dominantEmotion === surprised && surprised > 0.3) {
+        setDisplayEmoji("😲");
+      } else {
+        setDisplayEmoji("😐"); // Default to neutral emoji
+      }
     }
   }, [faceData, isAnimating, selectedEmoji]);
 
