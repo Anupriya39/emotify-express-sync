@@ -13,6 +13,7 @@ interface SpeechPointsProps {
 const SpeechPoints = ({ isActive }: SpeechPointsProps) => {
   const [isListening, setIsListening] = useState(false);
   const [points, setPoints] = useState<string[]>([]);
+  const [currentText, setCurrentText] = useState<string>("");
   const { toast } = useToast();
   
   useEffect(() => {
@@ -43,26 +44,26 @@ const SpeechPoints = ({ isActive }: SpeechPointsProps) => {
       recognition.interimResults = true;
       recognition.lang = 'en-US';
       
-      let currentTranscript = '';
-      
       recognition.onresult = (event) => {
         let interimTranscript = '';
+        let finalTranscript = '';
         
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const transcript = event.results[i][0].transcript;
           
           if (event.results[i].isFinal) {
-            currentTranscript += transcript;
-            
-            // Check if the transcript ends with punctuation
-            if (/[.!?]$/.test(transcript)) {
-              // Add the complete sentence as a point
-              setPoints(prev => [...prev, currentTranscript.trim()]);
-              currentTranscript = '';
-            }
+            finalTranscript += transcript;
+            // Add the complete sentence as a point
+            setPoints(prev => [...prev, finalTranscript.trim()]);
+            setCurrentText("");
           } else {
             interimTranscript += transcript;
           }
+        }
+        
+        // Show what is currently being recognized in real-time
+        if (interimTranscript) {
+          setCurrentText(interimTranscript);
         }
       };
       
@@ -110,6 +111,7 @@ const SpeechPoints = ({ isActive }: SpeechPointsProps) => {
         title: "Speech Recognition Stopped",
         description: "Your points have been saved.",
       });
+      setCurrentText("");
     }
   };
   
@@ -149,6 +151,13 @@ const SpeechPoints = ({ isActive }: SpeechPointsProps) => {
           )}
         </div>
       </div>
+      
+      {isListening && currentText && (
+        <div className="p-3 mb-4 bg-purple-light rounded-md border border-purple-dark animate-pulse">
+          <p className="text-purple-dark font-medium">Listening...</p>
+          <p className="text-gray-700">{currentText}</p>
+        </div>
+      )}
       
       {points.length > 0 ? (
         <div className="space-y-2 max-h-[300px] overflow-y-auto">
